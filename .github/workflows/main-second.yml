@@ -1,6 +1,5 @@
-# Complete GitHub Actions main-second.yml Workflow File
-
 name: Super Repack Builder (M11/A11) - Second Channel
+
 on:
   workflow_dispatch:
     inputs:
@@ -18,15 +17,16 @@ on:
       stock_firmware_url:
         description: 'Custom Stock Firmware Direct Download URL (Optional if preset selected)'
         required: false
-
         type: string
       custom_system_url:
         description: 'Custom ROM GSI / System Image Direct URL (.img / .zip / .xz)'
         required: true
         type: string
+
 env:
   WORK_DIR: 'work'
   OUTPUT_NAME: 'repacked_super'
+
 jobs:
   build:
     name: Execute ROM Repack Pipeline
@@ -36,7 +36,6 @@ jobs:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
         with:
-
           fetch-depth: 1
 
       - name: Set up Ubuntu Build Environment
@@ -45,15 +44,6 @@ jobs:
           sudo apt-get update
           echo "=== [LOG] Installing required Android sparse utilities and archive tools... ==="
           sudo apt-get install -y android-sdk-libsparse-utils p7zip-full tar coreutils aria2
-      - name: Cache Build Workspace and Toolchains
-        id: cache-build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.WORK_DIR }}
-            ~/.ccache
-            tools/          key: repack-m11-v2
-
 
       - name: Inline Execution - Download and Prepare Components
         run: |
@@ -74,7 +64,6 @@ jobs:
           PRESET_SELECTION="${{ github.event.inputs.device_preset }}"
           CUSTOM_STOCK_URL="${{ github.event.inputs.stock_firmware_url }}"
           
-
           if [ "$PRESET_SELECTION" = "none (Use Custom URL below)" ] || [ "$PRESET_SELECTION" = "none" ]; then
             if [ -n "$CUSTOM_STOCK_URL" ]; then
               echo "Downloading custom stock firmware from: $CUSTOM_STOCK_URL"
@@ -94,7 +83,6 @@ jobs:
           
           if [ ! -f "repacked_super.img" ]; then
             echo "=== [LOG] Initializing structural image block matrix allocation... ==="
-
             dd if=/dev/zero of=repacked_super.img bs=1M count=100
           fi
           
@@ -114,7 +102,6 @@ jobs:
             exit 1 
           fi
           
-
           mv repacked_super.img super.img
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           TAR_NAME="${OUTPUT_NAME}_${TIMESTAMP}.tar"
@@ -131,5 +118,6 @@ jobs:
         with:
           name: M11-Super-Repack-Split-Build
           path: |
-            work/repacked_super_*.tar.part_*          compression-level: 0
+            work/repacked_super_*.tar.part_*
+          compression-level: 0
           retention-days: 7
