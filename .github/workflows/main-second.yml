@@ -60,7 +60,6 @@ jobs:
           STOCK="${{ github.event.inputs.stock_firmware_url }}"
           SYSTEM="${{ github.event.inputs.custom_system_url }}"
           
-          # Fallback handling to ensure empty values don't break string parsing on execution
           if [ -z "$STOCK" ]; then STOCK="none"; fi
           if [ -z "$SYSTEM" ]; then SYSTEM="none"; fi
           
