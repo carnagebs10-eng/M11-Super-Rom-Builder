@@ -66,7 +66,7 @@ jobs:
             ${{ env.WORK_DIR }}
             ~/.ccache
             tools/          # Key binds to unique input links so cache invalidates only when firmware targets actually change
-          key: ${{ runner.os }}-repack-second-${{ hashFiles('**/repacksuper.sh') }}-${{ github.event.inputs.device_preset }}-${{ github.event.inputs.custom_system_url }}
+          key: ${{ runner.os }}-repack-second-${{ hashFiles('**/repacksuper.sh') }}--${{ github.event.inputs.device_preset }}--${{ github.event.inputs.custom_system_url }}
           restore-keys: |
             ${{ runner.os }}-repack-second-
       # Step 4: Parse input arguments and execute core repacking shell scripts
