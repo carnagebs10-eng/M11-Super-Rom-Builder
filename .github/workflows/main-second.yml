@@ -52,7 +52,7 @@ jobs:
           path: |
             ${{ env.WORK_DIR }}
             ~/.ccache
-            tools/          key: ${{ runner.os }}-repack-second-${{ hashFiles('**/repacksuper.sh') }}--${{ github.event.inputs.device_preset }}--${{ github.event.inputs.custom_system_url }}
+            tools/          key: ${{ runner.os }}-repack-second-${{ github.event.inputs.device_preset }}-${{ github.event.inputs.custom_system_url }}
           restore-keys: |
 
             ${{ runner.os }}-repack-second-
@@ -91,7 +91,7 @@ jobs:
           
           tar -cvf "$TAR_NAME" super.img
           split -b 1500M "$TAR_NAME" "${TAR_NAME}.part_"
-          echo "tar_chunks_path=${WORK_DIR}/${TAR_NAME}.part_*" >> $GITHUB_OUTPUT
+          echo "tar_chunks_path=${WORK_DIR}/${TAR_NAME}.part_?" >> $GITHUB_OUTPUT
 
 
       - name: Upload Uncompressed Multi-Part Split Artifacts
@@ -101,5 +101,3 @@ jobs:
           path: |
             work/repacked_super_*.tar.part_*          compression-level: 0
           retention-days: 7
-
-
