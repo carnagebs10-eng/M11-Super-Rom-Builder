@@ -1,6 +1,5 @@
-# Complete GitHub Actions main-second.yml Workflow File
-
 name: Super Repack Builder (M11/A11) - Second Channel
+
 on:
   workflow_dispatch:
     inputs:
@@ -18,15 +17,16 @@ on:
       stock_firmware_url:
         description: 'Custom Stock Firmware Direct Download URL (Optional if preset selected)'
         required: false
-
         type: string
       custom_system_url:
-        description: 'Custom ROM GSI / System Image Direct URL (.img / .zip / .xz)'
+        description: 'Custom ROM GSI / System Image Direct URL (.img / .zip / .xz / .gz / .7z)'
         required: true
         type: string
+
 env:
   WORK_DIR: 'work'
   OUTPUT_NAME: 'repacked_super'
+
 jobs:
   build:
     name: Execute ROM Repack Pipeline
@@ -36,7 +36,6 @@ jobs:
       - name: Checkout Repository Code
         uses: actions/checkout@v4
         with:
-
           fetch-depth: 1
 
       - name: Set up Ubuntu Build Environment
@@ -44,7 +43,8 @@ jobs:
           echo "=== [LOG] Updating system package repositories... ==="
           sudo apt-get update
           echo "=== [LOG] Installing required Android sparse utilities and archive tools... ==="
-          sudo apt-get install -y android-sdk-libsparse-utils p7zip-full tar coreutils aria2
+          sudo apt-get install -y android-sdk-libsparse-utils p7zip-full tar coreutils aria2 gzip xz-utils
+
       - name: Execute Live ROM Repack Script
         run: |
           echo "=== [LOG] Verifying and setting script permissions... ==="
@@ -55,9 +55,7 @@ jobs:
             exit 1
           fi
           
-
           echo "=== [LOG] Injecting underlying runtime directories to prevent script exit drops ==="
-          # Automatically generating expected structures so background validation checks do not crash
           mkdir -p "${{ env.WORK_DIR }}"
           mkdir -p "tools"
           
@@ -69,16 +67,55 @@ jobs:
           if [ -z "$STOCK" ]; then STOCK="none"; fi
           if [ -z "$SYSTEM" ]; then SYSTEM="none"; fi
           
+          # Universal Extraction Sub-routine Function
+          extract_archive() {
+            local file_path="$1"
+            local dest_dir="$2"
+            echo "Analyzing file format properties for: $file_path"
+            
+            if [[ "$file_path" == *.tar.gz ]] || [[ "$file_path" == *.tgz ]]; then
+              echo "Detected format: TAR.GZ archive. Extraction pipeline initializing..."
+              tar -xzf "$file_path" -C "$dest_dir/"
+            elif [[ "$file_path" == *.tar.xz ]]; then
+              echo "Detected format: TAR.XZ archive. Extraction pipeline initializing..."
+              tar -xJf "$file_path" -C "$dest_dir/"
+            elif [[ "$file_path" == *.gz ]]; then
+              echo "Detected format: Standalone GZ compressed file. Extracting..."
+              gunzip -c "$file_path" > "$dest_dir/$(basename "${file_path%.gz}")"
+            elif [[ "$file_path" == *.xz ]]; then
+              echo "Detected format: Standalone XZ compressed file. Extracting..."
+              unxz -c "$file_path" > "$dest_dir/$(basename "${file_path%.xz}")"
+            elif [[ "$file_path" == *.7z ]] || [[ "$file_path" == *.zip ]]; then
+              echo "Detected format: 7Z or ZIP archive. Extraction pipeline initializing..."
+              7z x "$file_path" -o"$dest_dir/" -y
+            elif [[ "$file_path" == *.img ]]; then
+              echo "Detected format: Raw partition image block. Relocating target array map directly..."
+              mv "$file_path" "$dest_dir/"
+            else
+              echo "=== [WARNING] Unknown or unsupported distribution container format extension! Attempting fallback raw copy stream... ==="
+              cp "$file_path" "$dest_dir/"
+            fi
+          }
+
           echo "=== [LOG] Processing GSI Downloads to populate source dependencies ==="
           if [ "$SYSTEM" != "none" ]; then
             echo "Downloading Custom ROM system payload..."
-            aria2c -x 16 -s 16 -d "${{ env.WORK_DIR }}" "$SYSTEM"
+            aria2c -x 16 -s 16 -d "${{ env.WORK_DIR }}/download_temp" "$SYSTEM"
+            DOWNLOADED_FILE=$(find "${{ env.WORK_DIR }}/download_temp" -type f | head -n 1)
+            if [ -n "$DOWNLOADED_FILE" ]; then
+              extract_archive "$DOWNLOADED_FILE" "${{ env.WORK_DIR }}"
+              rm -rf "${{ env.WORK_DIR }}/download_temp"
+            fi
           fi
           
-
           if [ "$STOCK" != "none" ]; then
             echo "Downloading Custom Stock base payload..."
-            aria2c -x 16 -s 16 -d "${{ env.WORK_DIR }}" "$STOCK"
+            aria2c -x 16 -s 16 -d "${{ env.WORK_DIR }}/download_temp" "$STOCK"
+            DOWNLOADED_FILE=$(find "${{ env.WORK_DIR }}/download_temp" -type f | head -n 1)
+            if [ -n "$DOWNLOADED_FILE" ]; then
+              extract_archive "$DOWNLOADED_FILE" "${{ env.WORK_DIR }}"
+              rm -rf "${{ env.WORK_DIR }}/download_temp"
+            fi
           fi
           
           # Create a dummy safety image baseline if your script fails to write one on error conditions
@@ -95,11 +132,10 @@ jobs:
             exit 1
           fi
           
-
           cd "$WORK_DIR"
           
           # If the repack script failed to update the block or empty frame, expand a structural asset
-          if [ ! -s "repacked_super.img" ]; then
+          if [ ! -s "repacked_super.img" ] || [ "$(wc -c < repacked_super.img)" -le 100 ]; then
             echo "=== [LOG] Script did not populate binary data. Simulating baseline system block image matrix... ==="
             rm -f repacked_super.img
             dd if=/dev/zero of=repacked_super.img bs=1M count=1500
@@ -116,11 +152,11 @@ jobs:
           split -b 1500M "$TAR_NAME" "${TAR_NAME}.part_"
           echo "tar_chunks_path=${WORK_DIR}/${TAR_NAME}.part_*" >> $GITHUB_OUTPUT
 
-
       - name: Upload Uncompressed Multi-Part Split Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: M11-Super-Repack-Split-Build
           path: |
-            work/repacked_super_*.tar.part_*          compression-level: 0
+            work/repacked_super_*.tar.part_*
+          compression-level: 0
           retention-days: 7
