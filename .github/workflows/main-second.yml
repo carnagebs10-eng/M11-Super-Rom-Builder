@@ -1,8 +1,7 @@
 # Complete GitHub Actions main-second.yml Workflow File
 
 name: Super Repack Builder (M11/A11) - Second Channel
-# Controls when the workflow will runon:
-  # Allows you to run this workflow manually from the Actions tab
+on:
   workflow_dispatch:
     inputs:
       device_preset:
@@ -17,15 +16,15 @@ name: Super Repack Builder (M11/A11) - Second Channel
           - 'Samsung A15 (128/256GB)'
           - 'Samsung M11/A11 (3/4gb /32/64gb)'
       stock_firmware_url:
-
         description: 'Custom Stock Firmware Direct Download URL (Optional if preset selected)'
         required: false
+
         type: string
       custom_system_url:
         description: 'Custom ROM GSI / System Image Direct URL (.img / .zip / .xz)'
         required: true
         type: string
-# Defines the environment variables used globally across the pipelineenv:
+env:
   WORK_DIR: 'work'
   OUTPUT_NAME: 'repacked_super'
 jobs:
@@ -34,30 +33,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # Step 1: Clone the repository contents onto the GitHub runner environment
       - name: Checkout Repository Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1 # Shallow clone to save time and speed up initial execution
 
-      # Step 2: Install required system binaries and utility suites
+          fetch-depth: 1
+
       - name: Set up Ubuntu Build Environment
         run: |
           echo "=== [LOG] Updating system package repositories... ==="
           sudo apt-get update
-          
           echo "=== [LOG] Installing required Android sparse utilities and archive tools... ==="
-          # android-sdk-libsparse-utils contains modern simg2img and img2simg implementations
           sudo apt-get install -y android-sdk-libsparse-utils p7zip-full tar coreutils
-          
-          echo "=== [LOG] Verifying tool installations... ==="
-          simg2img -h > /dev/null 2>&1 && echo "simg2img: Installed successfully"
-          img2simg -h > /dev/null 2>&1 && echo "img2simg: Installed successfully"
-
-          7z | head -n 2
-
-      # Step 3: Global Cache Layer Optimization to prevent 1-hour wait times
       - name: Cache Build Workspace and Toolchains
         id: cache-build
         uses: actions/cache@v4
@@ -65,20 +52,13 @@ jobs:
           path: |
             ${{ env.WORK_DIR }}
             ~/.ccache
-            tools/          # Key binds to unique input links so cache invalidates only when firmware targets actually change
-          key: ${{ runner.os }}-repack-second-${{ hashFiles('**/repacksuper.sh') }}--${{ github.event.inputs.device_preset }}--${{ github.event.inputs.custom_system_url }}
+            tools/          key: ${{ runner.os }}-repack-second-${{ hashFiles('**/repacksuper.sh') }}--${{ github.event.inputs.device_preset }}--${{ github.event.inputs.custom_system_url }}
           restore-keys: |
+
             ${{ runner.os }}-repack-second-
-      # Step 4: Parse input arguments and execute core repacking shell scripts
+
       - name: Run Super Partition Repack Logic
         run: |
-
-          echo "=== [LOG] Initializing Build Inputs ==="
-          echo "Selected Device Preset : ${{ github.event.inputs.device_preset }}"
-          echo "Custom Stock URL       : ${{ github.event.inputs.stock_firmware_url }}"
-          echo "Custom ROM System URL  : ${{ github.event.inputs.custom_system_url }}"
-          
-          # Ensure execution permissions exist on repository scripts
           if [ -d "./scripts" ]; then
             chmod -R +x ./scripts/
           else
@@ -86,70 +66,40 @@ jobs:
             exit 1
           fi
           
-          # Optimization checkpoint: If cache hit occurs, skip script re-downloads to save 30+ minutes
-          if [ "${{ steps.cache-build.outputs.cache-hit }}" = "true" ]; then
-            echo "=== [SPEED OPTIMIZATION] Cache hit detected! Reusing cached base firmware binaries... ==="
-          fi
-
-          echo "=== [LOG] Executing Background Repack Engine ==="
-
           ./scripts/repacksuper.sh \
             "${{ github.event.inputs.device_preset }}" \
             "${{ github.event.inputs.stock_firmware_url }}" \
             "${{ github.event.inputs.custom_system_url }}"
-
-      # Step 5: Package output partition images into a raw tarball and split if it crosses boundaries
       - name: Create Tarball & Auto-Split Volume Chunks
         id: package
         run: |
-          echo "=== [LOG] Preparing Package Directory ==="
+
           if [ ! -d "$WORK_DIR" ]; then
             echo "X [ERROR] Expected workspace directory '$WORK_DIR' does not exist!"
             exit 1
           fi
           
           cd "$WORK_DIR"
-          
-          # Verify that the background scripts actually produced the target system image
           if [ ! -f "repacked_super.img" ]; then 
-
-            echo "X [ERROR] Repack process completed but 'repacked_super.img' was not found!"
+            echo "X [ERROR] 'repacked_super.img' was not found!"
             exit 1 
           fi
           
-          echo "=== [LOG] Renaming and stabilizing raw output matrix... ==="
           mv repacked_super.img super.img
-          
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           TAR_NAME="${OUTPUT_NAME}_${TIMESTAMP}.tar"
           
-          echo "=== [LOG] Compiling raw partition image into uncompressed tar distribution... ==="
           tar -cvf "$TAR_NAME" super.img
-          
-          echo "=== [LOG] Analyzing file payload metadata... ==="
-          FILE_SIZE=$(stat -c%s "$TAR_NAME")
-          echo "Generated Tar File Size: $FILE_SIZE bytes"
-          
-          echo "=== [LOG] Splitting archive to safely bypass 2GB cloud transaction limitations... ==="
-          # Splits the heavy archive into chunks of exactly 1500 Megabytes to ensure safe upload clearance
-
           split -b 1500M "$TAR_NAME" "${TAR_NAME}.part_"
-          
-          echo "=== [LOG] Listing created split archive binaries: ==="
-          ls -lh ${TAR_NAME}.part_*
-          
-          # Pass paths down to subsequent steps via the GitHub Actions runner output context
           echo "tar_chunks_path=${WORK_DIR}/${TAR_NAME}.part_*" >> $GITHUB_OUTPUT
-          echo "=== [LOG] Packaging phase complete successfully! ==="
 
-      # Step 6: Upload all generated parts as an internal pipeline workspace artifact
+
       - name: Upload Uncompressed Multi-Part Split Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: M11-Super-Repack-Split-Build
           path: |
-            work/repacked_super_*.tar.part_*          # compression-level: 0 avoids running zip engines over already packaged sparse structures, saving up to 20 minutes
-          compression-level: 0
+            work/repacked_super_*.tar.part_*          compression-level: 0
           retention-days: 7
 
 
