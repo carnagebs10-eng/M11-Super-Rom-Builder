@@ -55,14 +55,17 @@ jobs:
             exit 1
           fi
           
-          echo "=== [LOG] Launching Core Repack Logic Engine... ==="
-          # Define and export variables to handle internal script variations securely
-          export DEVICE_PRESET="${{ github.event.inputs.device_preset }}"
-          export STOCK_URL="${{ github.event.inputs.stock_firmware_url }}"
-          export SYSTEM_URL="${{ github.event.inputs.custom_system_url }}"
+          echo "=== [LOG] Extracting input configurations safely... ==="
+          PRESET="${{ github.event.inputs.device_preset }}"
+          STOCK="${{ github.event.inputs.stock_firmware_url }}"
+          SYSTEM="${{ github.event.inputs.custom_system_url }}"
           
-          # Pass parameters BOTH as standard inline arguments and exported environment variables
-          ./scripts/repacksuper.sh "$DEVICE_PRESET" "$STOCK_URL" "$SYSTEM_URL"
+          # Fallback handling to ensure empty values don't break string parsing on execution
+          if [ -z "$STOCK" ]; then STOCK="none"; fi
+          if [ -z "$SYSTEM" ]; then SYSTEM="none"; fi
+          
+          echo "=== [LOG] Launching Core Repack Logic Engine with pure positional tokens... ==="
+          bash ./scripts/repacksuper.sh "$PRESET" "$STOCK" "$SYSTEM"
 
       - name: Create Tarball & Auto-Split Volume Chunks
         id: package
