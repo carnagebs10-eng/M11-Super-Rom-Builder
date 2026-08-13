@@ -56,11 +56,12 @@ jobs:
           fi
           
           echo "=== [LOG] Launching Core Repack Logic Engine... ==="
-          # Executing script with direct environment variables to completely bypass broken position shell operator bugs
+          # Define and export variables to handle internal script variations securely
           export DEVICE_PRESET="${{ github.event.inputs.device_preset }}"
           export STOCK_URL="${{ github.event.inputs.stock_firmware_url }}"
           export SYSTEM_URL="${{ github.event.inputs.custom_system_url }}"
           
+          # Pass parameters BOTH as standard inline arguments and exported environment variables
           ./scripts/repacksuper.sh "$DEVICE_PRESET" "$STOCK_URL" "$SYSTEM_URL"
 
       - name: Create Tarball & Auto-Split Volume Chunks
